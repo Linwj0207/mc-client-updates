@@ -62,6 +62,15 @@ function Assert-Manifest($Manifest, [bool]$Remote) {
     }
     return $names
 }
+function Matches-InitialSet($Names) {
+    foreach ($path in $Names.Keys) {
+        $target = Join-Path $game $path.Replace('/', '\')
+        Assert-Plain $target
+        if ([IO.File]::Exists($target) -and (Sha256 $target) -ne $Names[$path].sha256) { return $false }
+    }
+    $extra = @(Get-ChildItem -LiteralPath $mods -File -Filter '*.jar' | Where-Object { -not $Names.ContainsKey('mods/' + $_.Name) })
+    return $extra.Count -eq 0
+}
 function Assert-DownloadUrl([string]$Url) {
     $uri = [Uri]$Url
     $allowed = @('cdn.modrinth.com', 'mediafilez.forgecdn.net', 'edge.forgecdn.net', 'maven.ftb.dev', 'github.com', 'raw.githubusercontent.com')
@@ -145,6 +154,7 @@ try {
     Assert-Plain $statePath
     $baseline = Read-Json (Join-Path $PSScriptRoot 'baseline.json')
     $baselineNames = Assert-Manifest $baseline $false
+    $firstConnection = -not [IO.File]::Exists($statePath)
     if ([IO.File]::Exists($statePath)) {
         $state = Read-Json $statePath
         if ($state.repository -cne $settings.repository -or $state.version_id -cne $settings.version_id) { throw '此客户端已接入其他更新源，请联系服主。' }
@@ -153,15 +163,6 @@ try {
     } else {
         $previous = $baseline
         $previousNames = $baselineNames
-        foreach ($path in $baselineNames.Keys) {
-            $target = Join-Path $game $path.Replace('/', '\')
-            Assert-Plain $target
-            if ([IO.File]::Exists($target) -and (Sha256 $target) -ne $baselineNames[$path].sha256) {
-                throw ('当前客户端不是原联机版本，暂不覆盖：' + $path)
-            }
-        }
-        $extra = @(Get-ChildItem -LiteralPath $mods -File -Filter '*.jar' | Where-Object { -not $baselineNames.ContainsKey('mods/' + $_.Name) })
-        if ($extra.Count) { throw '首次接入发现原清单以外的 Mod，请让服主核对；没有覆盖当前测试客户端。' }
     }
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $repo = [string]$settings.repository
@@ -191,6 +192,10 @@ try {
     $next = Read-Json $manifestPath
     $nextNames = Assert-Manifest $next $true
     if ($next.id -cne $channel.tag) { throw '发布版本标识不一致。' }
+    if ($firstConnection -and -not (Matches-InitialSet $baselineNames)) {
+        if (Matches-InitialSet $nextNames) { $previous = $next; $previousNames = $nextNames }
+        else { throw '首次接入发现与原版或当前正式版不同的 Mod，请让服主核对；没有覆盖当前测试客户端。' }
+    }
     $changes = @{}
     foreach ($file in $next.files) {
         $target = Join-Path $game $file.path.Replace('/', '\')
