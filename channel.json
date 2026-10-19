@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "tag": null,
-  "manifest": null,
-  "sha256": null
+  "tag": "baseline-20261015",
+  "manifest": "manifests/baseline-20261015.json",
+  "sha256": "eeaff032f1b7ecf334ada69b1ec319a8c135b361f630b68c8fa954c227471c7c"
 }
