@@ -1,0 +1,9 @@
+*
+!.gitignore
+!README.md
+!sync.ps1
+!bootstrap.json
+!baseline.json
+!channel.json
+!manifests/
+!manifests/*.json
